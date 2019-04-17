@@ -1,0 +1,21 @@
+{
+    "name": "node_testing",
+    "description": "Local Node Testing",
+    "version": "0.0.0",
+    "scripts": {
+        "start": "node src/index.js",
+        "postinstall": "link-module-alias",
+        "preinstall": "command -v link-module-alias && link-module-alias clean || true"
+    },
+    "dependencies": {
+        "chalk": "^2.4.2",
+        "link-module-alias": "^1.2.0"
+    },
+    "_moduleAliases": {
+        "@toyota/core": "src",
+        "@toyota/cdk": "src",
+        "~project/app": "src/app/",
+        "~project/dir": "./src/deep/nested/directory/",
+        "~project/config": "./config/config.js"
+    }
+}
