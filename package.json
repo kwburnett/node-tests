@@ -12,10 +12,15 @@
         "link-module-alias": "^1.2.0"
     },
     "_moduleAliases": {
-        "@toyota/core": "src",
-        "@toyota/cdk": "src",
-        "~project/app": "src/app/",
-        "~project/dir": "./src/deep/nested/directory/",
-        "~project/config": "./config/config.js"
+        "@kbfun/core": "src",
+        "@kbfun/cdk": "src",
+        "~project/app": "./src/app/",
+        "~project/dir": "./src/deep/nested/directory",
+        "~project/dir2/test": "./src/deep/nested/directory/",
+        "~project/config": "./config/config.js",
+        "~root"      : ".",
+        "~deep"      : "src/some/very/deep/directory/or/file",
+        "@my_module" : "lib/some-file.js",
+        "something"  : "src/foo"
     }
 }

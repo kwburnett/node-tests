@@ -3,23 +3,22 @@
 
 const fs = require('fs');
 const path = require('path');
-const child_process = require('child_process');
 
-let packageJson;
-try {
-  packageJson = JSON.parse(`{
+// const packageJson = require('./package.json');
+const packageJson = JSON.parse(`{
   "_moduleAliases": {
-    "@toyota/core": "src",
-    "@toyota/cdk": "src",
+    "@kbfun/core": "src",
+    "@kbfun/cdk": "src",
     "~project/app": "./src/app/",
     "~project/dir": "./src/deep/nested/directory",
-    "~project/config": "./config/config.js"
+    "~project/dir2/test": "./src/deep/nested/directory/",
+    "~project/config": "./config/config.js",
+    "~root"      : ".",
+    "~deep"      : "src/some/very/deep/directory/or/file",
+    "@my_module" : "lib/some-file.js",
+    "something"  : "src/foo"
   }
 }`);
-} catch(err) {
-  console.error('Cannot open package.json:', err);
-  process.exit(1);
-}
 
 const moduleAliases = packageJson._moduleAliases;
 if(!moduleAliases) {
@@ -31,7 +30,6 @@ const { promisify } = require('util');
 
 const stat = promisify(fs.stat);
 const lstat = promisify(fs.lstat);
-const readFile = promisify(fs.readFile);
 const writeFile = promisify(fs.writeFile);
 const unlink = promisify(fs.unlink);
 const readdir = promisify(fs.readdir);
@@ -130,21 +128,21 @@ async function unlinkModule(moduleName) {
   return { moduleName, type };
 }
 
-function js(strings, ...interpolatedValues) {
-  return strings.reduce((total, current, index) => {
-    total += current;
-    if (interpolatedValues.hasOwnProperty(index)) {
-      total += JSON.stringify(interpolatedValues[index]);
-    }
-    return total;
-  }, '');
-}
-
 async function linkModule(moduleName) {
   const moduleDir = path.join('node_modules', moduleName);
   const moduleExists = await exists(moduleDir);
   const linkExists = moduleExists && await exists(path.join('node_modules', getModuleAlias(moduleName)));
-  const target = moduleAliases[moduleName];
+  const moduleAlias = moduleAliases[moduleName];
+  const isSimpleAlias = typeof moduleAlias === 'string';
+  const typings = isSimpleAlias ? undefined : moduleAlias.typings;
+  const target = isSimpleAlias ? moduleAlias : moduleAlias.main;
+
+  if (moduleName.match(/^@/) && !packageJson._moduleAliasIgnoreWarning) {
+    console.warn(
+      chalk.yellow(`WARNING! Using @ in front of your module name ${moduleName} may cause data loss. Please read this issue thread https://github.com/Rush/link-module-alias/issues/3 and make a backup before executing any npm/yarn commands. The issue ultimately can be blamed on npm/yarn. You've been warned.`) +
+        ` -- you can disable this warning by setting _moduleAliasIgnoreWarning to true in your package.json`
+    );
+  }
 
   let type;
   if(moduleExists && !linkExists) {
@@ -158,21 +156,27 @@ async function linkModule(moduleName) {
   if(target.match(/\.js$/)) {
     // console.log(`Target ${target} is a direct link, creating proxy require`);
     await mkdir(moduleDir);
-    await writeFile(path.join(moduleDir, 'package.json'), js`
-      {
-        "name": ${moduleName},
-        "main": ${path.join('../../', target)}
-      }
-    `);
+
+    const packageJsonObj = {
+      name: moduleName,
+      main: path.join('../../', target),
+    };
+
+    if (typings) {
+      packageJsonObj.typings = path.join('../../', typings);
+    }
+
+    await writeFile(path.join(moduleDir, 'package.json'), JSON.stringify(packageJsonObj, null, 2));
     type = 'proxy';
   } else {
-    const stat = fs.statSync(target);
-    if(!stat.isDirectory) {
+    const stat = fs.lstatSync(target);
+    if(!stat.isDirectory()) {
       console.log(`Target ${target} is not a directory, skipping ...`);
       type = 'none';
       return { moduleName, type, target };
     }
     // Check if there is a nested alias
+    let directoryUp = '../'.repeat((moduleName.match(/\//g) || []).length);
     if (moduleName.includes('/')) {
       // If every directory is already made, mkdir will throw an error
       try {
@@ -185,9 +189,7 @@ async function linkModule(moduleName) {
         }
       }
     }
-    console.log('hello!');
-    console.log(process.cwd());
-    await symlink(path.join('../', target), moduleDir, DIR_LINK_TYPE);
+    await symlink(path.join('../', directoryUp, target), moduleDir, DIR_LINK_TYPE);
     type = 'symlink';
   }
   await writeFile(path.join('node_modules', getModuleAlias(moduleName)), '');
